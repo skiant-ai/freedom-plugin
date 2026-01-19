@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Freedom Plug-In ⚡</title>
+    <style>
+        :root {
+            --pink: #ff75a0;
+            --teal: #2effd3;
+            --gold: #ffcf4b;
+            --purple: #b879ff;
+            --bg: #0f0c29;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: radial-gradient(circle at center, #1a1442, #0f0c29);
+            color: white;
+            overflow: hidden;
+            height: 100vh;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        /* --- Gameplay UI & Canvas --- */
+        #ui-layer, #game-canvas {
+            transition: opacity 2s ease-in-out, filter 2s ease-in-out;
+        }
+
+        .fade-out { opacity: 0 !important; filter: blur(20px); pointer-events: none; }
+
+        #ui-layer {
+            position: fixed; top: 40px; width: 100%; text-align: center;
+            z-index: 10; font-weight: 800; color: var(--pink); font-size: 1.4rem;
+            text-shadow: 0 0 15px rgba(255,117,160,0.6); pointer-events: none;
+        }
+
+        #game-canvas { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; padding: 20px; z-index: 5; }
+
+        .socket {
+            width: 115px; height: 115px; background: rgba(255, 255, 255, 0.05);
+            border-radius: 28px; border: 2px solid rgba(255, 255, 255, 0.1);
+            display: flex; align-items: center; justify-content: center; position: relative;
+        }
+
+        .socket.active {
+            border-color: #fff;
+            animation: pulse var(--pulse-speed, 1.5s) infinite ease-in-out;
+        }
+
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 15px var(--glow-color), inset 0 0 5px var(--glow-color); transform: scale(1); }
+            50% { box-shadow: 0 0 45px var(--glow-color), inset 0 0 20px var(--glow-color); transform: scale(1.08); }
+        }
+
+        .socket-inner {
+            width: 70px; height: 70px; background: #f0f0f0; border-radius: 15px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            box-shadow: inset 0 4px 8px rgba(0,0,0,0.3); pointer-events: none;
+        }
+        .holes { display: flex; gap: 8px; margin-bottom: 5px; }
+        .hole { width: 8px; height: 18px; background: #222; border-radius: 2px; }
+        .ground { width: 12px; height: 12px; background: #222; border-radius: 50%; }
+
+        #plug {
+            position: absolute; width: 65px; height: 90px; z-index: 100;
+            touch-action: none; filter: drop-shadow(0 10px 15px rgba(0,0,0,0.6));
+            cursor: grab; display: none;
+        }
+
+        .overlay {
+            position: fixed; inset: 0; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; background: #0f0c29;
+            z-index: 9999; text-align: center; padding: 20px;
+        }
+
+        .btn {
+            margin-top: 30px; padding: 18px 50px;
+            background: linear-gradient(45deg, #ff75a0, #b879ff);
+            border: none; border-radius: 50px; color: white;
+            font-weight: 900; font-size: 1.3rem;
+            box-shadow: 0 10px 25px rgba(255, 117, 160, 0.4); cursor: pointer;
+        }
+
+        /* --- Win Screen Styles --- */
+        #win-screen {
+            display: none; opacity: 0;
+            transition: opacity 1.5s ease-in;
+            background: radial-gradient(circle, #1a1442 0%, #08061a 100%);
+        }
+
+        .bird-connection {
+            display: flex; align-items: center; justify-content: center;
+            gap: 10px; margin-bottom: 30px; position: relative;
+        }
+
+        .cable-bird {
+            width: 100px; height: 100px;
+            filter: drop-shadow(0 0 15px rgba(255,117,160,0.4));
+        }
+
+        .bird-left { animation: flyInLeft 1.2s ease-out forwards; }
+        .bird-right { animation: flyInRight 1.2s ease-out forwards; }
+
+        @keyframes flyInLeft {
+            0% { transform: translateX(-100px) scale(0.5); opacity: 0; }
+            100% { transform: translateX(15px) scale(1); opacity: 1; }
+        }
+        @keyframes flyInRight {
+            0% { transform: translateX(100px) scale(0.5); opacity: 0; }
+            100% { transform: translateX(-15px) scale(1); opacity: 1; }
+        }
+
+        .spark {
+            position: absolute; width: 40px; height: 40px;
+            background: var(--teal); filter: blur(10px); border-radius: 50%;
+            animation: sparkFlash 0.5s 1.2s ease-out forwards;
+            opacity: 0; z-index: 10;
+        }
+
+        @keyframes sparkFlash {
+            0% { transform: scale(0); opacity: 1; }
+            100% { transform: scale(3); opacity: 0; }
+        }
+
+        .coupon-container {
+            position: relative; width: 340px;
+            filter: drop-shadow(0 20px 40px rgba(0,0,0,0.6));
+            animation: slideUp 1s 1.5s cubic-bezier(0.17, 0.67, 0.83, 0.67) forwards;
+            opacity: 0;
+        }
+
+        @keyframes slideUp {
+            0% { transform: translateY(50px); opacity: 0; }
+            100% { transform: translateY(0); opacity: 1; }
+        }
+
+        .puzzle-shape { fill: #fff; stroke: #f0f0f0; stroke-width: 1; }
+
+        .coupon-inner {
+            position: absolute; inset: 0;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            padding: 30px; color: #1a1a2e; text-align: center;
+        }
+
+        .coupon-inner h4 {
+            text-transform: uppercase; color: var(--pink);
+            letter-spacing: 3px; font-size: 0.9rem; margin-bottom: 5px;
+            font-weight: 800;
+        }
+
+        .coupon-inner h2 {
+            font-family: 'Georgia', serif; font-size: 1.8rem;
+            font-weight: 900; margin-bottom: 15px; line-height: 1.1;
+            background: linear-gradient(45deg, #1a1442, #ff75a0);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+
+        .coupon-inner p { font-size: 0.85rem; color: #555; max-width: 80%; line-height: 1.4; font-weight: 600; }
+
+        .redeem-instruction {
+            margin-top: 20px; font-weight: 800; color: #333;
+            display: flex; align-items: center; gap: 8px; font-size: 0.75rem;
+        }
+
+        .particle {
+            position: fixed; pointer-events: none; z-index: 5000;
+            font-size: 4.5rem; animation: celebration var(--dur) ease-out forwards;
+        }
+        @keyframes celebration {
+            0% { transform: translate(0, 100vh) scale(0); opacity: 0; }
+            20% { opacity: 1; transform: translate(var(--tx-mid), 40vh) scale(1.3); }
+            100% { transform: translate(var(--tx-end), -20vh) scale(0.8) rotate(var(--rot)); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui-layer">ENERGY: <span id="score-val">0</span> / 12</div>
+
+    <div id="game-canvas">
+        <div class="socket" id="s0" style="--glow-color: var(--pink)"><div class="socket-inner"><div class="holes"><div class="hole"></div><div class="hole"></div></div><div class="ground"></div></div></div>
+        <div class="socket" id="s1" style="--glow-color: var(--teal)"><div class="socket-inner"><div class="holes"><div class="hole"></div><div class="hole"></div></div><div class="ground"></div></div></div>
+        <div class="socket" id="s2" style="--glow-color: var(--gold)"><div class="socket-inner"><div class="holes"><div class="hole"></div><div class="hole"></div></div><div class="ground"></div></div></div>
+        <div class="socket" id="s3" style="--glow-color: var(--purple)"><div class="socket-inner"><div class="holes"><div class="hole"></div><div class="hole"></div></div><div class="ground"></div></div></div>
+    </div>
+
+    <div id="plug">
+        <svg viewBox="0 0 60 100">
+            <path d="M30 60 L30 100" stroke="#aaa" stroke-width="6" />
+            <rect x="5" y="15" width="50" height="50" rx="10" fill="#fff" />
+            <rect x="15" y="0" width="8" height="20" rx="2" fill="#d4af37" />
+            <rect x="37" y="0" width="8" height="20" rx="2" fill="#d4af37" />
+            <circle cx="30" cy="40" r="10" fill="#ff75a0" opacity="0.4" />
+        </svg>
+    </div>
+
+    <div id="start-screen" class="overlay">
+        <h1 style="font-size: 3rem; color:var(--pink); margin-bottom: 10px; text-shadow: 0 0 20px rgba(255,117,160,0.5);">Freedom Plug-In</h1>
+        <p style="font-size: 1.2rem; color: #fff; margin-bottom: 25px;">Help me get energy!</p>
+        <button id="start-btn" class="btn">⚡ START ⚡</button>
+    </div>
+
+    <div id="win-screen" class="overlay">
+        <div class="bird-connection">
+            <div class="spark"></div>
+            <svg class="cable-bird bird-left" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="35" fill="#FFF" />
+                <path d="M75 45 L85 45 M75 55 L85 55" stroke="#aaa" stroke-width="4" stroke-linecap="round" />
+                <circle cx="65" cy="40" r="4" fill="#222" />
+                <path d="M35 30 Q50 10 65 30" fill="#ff75a0" />
+                <path d="M85 40 Q95 50 85 60 Z" fill="#ff75a0" />
+            </svg>
+            <svg class="cable-bird bird-right" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="35" fill="#5CB85C" />
+                <path d="M15 45 L5 45 M15 55 L5 55" stroke="#d4af37" stroke-width="4" stroke-linecap="round" />
+                <circle cx="35" cy="40" r="4" fill="#222" />
+                <path d="M35 30 Q50 10 65 30" fill="#FFE94A" />
+                <path d="M15 40 Q5 50 15 60 Z" fill="#FFE94A" />
+            </svg>
+        </div>
+        <h2 style="color:var(--teal); font-size: 2rem; letter-spacing: 4px; margin-bottom: 20px; text-shadow: 0 0 15px var(--teal);">CONNECTED!</h2>
+        <div class="coupon-container">
+            <svg viewBox="0 0 400 300" class="puzzle-shape">
+                <path d="M40,60 H160 A30,30 0 1,0 220,60 H360 V110 A30,30 0 1,1 360,170 V240 H260 A30,30 0 1,0 200,240 H40 V180 A30,30 0 1,1 40,120 V60" />
+            </svg>
+            <div class="coupon-inner">
+                <h4>Puzzle Reward</h4>
+                <h2>ONE FREE<br>DATE NIGHT</h2>
+                <p>Valid for dinner, a movie, or an adventure of your choice.</p>
+                <div class="redeem-instruction">
+                    <span>SCREENSHOT TO REDEEM</span> 🧩 ❤️
+                </div>
+            </div>
+        </div>
+        <button id="reset-btn" class="btn" style="margin-top: 40px; opacity: 0.8; font-size: 1rem; padding: 12px 30px;">Play Again</button>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            let score = 0;
+            let activeIndex = -1;
+            let gameActive = false;
+            let dragging = false;
+            const winScore = 12;
+
+            const startBtn = document.getElementById('start-btn');
+            const resetBtn = document.getElementById('reset-btn');
+            const plug = document.getElementById('plug');
+            const sockets = document.querySelectorAll('.socket');
+            const scoreVal = document.getElementById('score-val');
+
+            function beginAdventure() {
+                document.getElementById('start-screen').style.display = 'none';
+                plug.style.display = 'block';
+                gameActive = true;
+                resetPlug();
+                nextRound();
+            }
+
+            function resetPlug() {
+                plug.style.left = (window.innerWidth/2 - 32) + 'px';
+                plug.style.top = (window.innerHeight - 140) + 'px';
+                plug.style.transform = 'scale(1)';
+            }
+
+            function nextRound() {
+                sockets.forEach(s => s.classList.remove('active'));
+                activeIndex = Math.floor(Math.random() * 4);
+                const s = sockets[activeIndex];
+                s.classList.add('active');
+                s.style.setProperty('--pulse-speed', Math.max(0.5, 1.5 - (score * 0.1)) + 's');
+            }
+
+            function spawnBlast(n) {
+                const items = ['❤️', '💖', '💗', '💞', '🧩', '🦜', '🕊️'];
+                for(let i=0; i<n; i++) {
+                    const p = document.createElement('div');
+                    p.className = 'particle';
+                    p.innerHTML = items[Math.floor(Math.random() * items.length)];
+                    p.style.left = (Math.random() * window.innerWidth) + 'px';
+                    p.style.setProperty('--tx-mid', (Math.random() - 0.5) * 500 + 'px');
+                    p.style.setProperty('--tx-end', (Math.random() - 0.5) * 900 + 'px');
+                    p.style.setProperty('--rot', (Math.random() * 720 - 360) + 'deg');
+                    p.style.setProperty('--dur', (Math.random() * 2 + 1) + 's');
+                    document.body.appendChild(p);
+                    setTimeout(() => p.remove(), 3500);
+                }
+            }
+
+            function success() {
+                dragging = false;
+                resetPlug();
+                score++;
+                scoreVal.innerText = score;
+                spawnBlast(7 + (score * 2));
+                
+                if (score >= winScore) {
+                    gameActive = false;
+                    document.getElementById('game-canvas').classList.add('fade-out');
+                    document.getElementById('ui-layer').classList.add('fade-out');
+                    plug.style.display = 'none';
+
+                    let counts = 0;
+                    const fest = setInterval(() => {
+                        spawnBlast(20);
+                        counts++;
+                        if(counts > 12) clearInterval(fest);
+                    }, 300);
+
+                    setTimeout(() => {
+                        const winScreen = document.getElementById('win-screen');
+                        winScreen.style.display = 'flex';
+                        setTimeout(() => winScreen.style.opacity = '1', 100);
+                    }, 4000); 
+                } else {
+                    nextRound();
+                }
+            }
+
+            // Bind interactions
+            startBtn.addEventListener('click', beginAdventure);
+            startBtn.addEventListener('touchstart', (e) => { e.preventDefault(); beginAdventure(); });
+            
+            resetBtn.addEventListener('click', () => location.reload());
+
+            const onGrab = (e) => { 
+                if(gameActive) { 
+                    dragging = true; 
+                    plug.style.transform = 'scale(1.15)'; 
+                } 
+            };
+
+            plug.addEventListener('mousedown', onGrab);
+            plug.addEventListener('touchstart', onGrab);
+
+            function onMove(e) {
+                if(!dragging || !gameActive) return;
+                const x = e.touches ? e.touches[0].clientX : e.clientX;
+                const y = e.touches ? e.touches[0].clientY : e.clientY;
+                plug.style.left = (x - 32) + 'px';
+                plug.style.top = (y - 45) + 'px';
+                sockets.forEach((s, i) => {
+                    const r = s.getBoundingClientRect();
+                    if (x > r.left && x < r.right && y > r.top && y < r.bottom && i === activeIndex) success();
+                });
+            }
+
+            window.addEventListener('mousemove', onMove);
+            window.addEventListener('touchmove', onMove, {passive:false});
+            window.addEventListener('mouseup', () => { if(dragging) { dragging = false; resetPlug(); } });
+            window.addEventListener('touchend', () => { if(dragging) { dragging = false; resetPlug(); } });
+        });
+    </script>
+</body>
+</html>
